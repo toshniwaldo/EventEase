@@ -1,5 +1,9 @@
+"use client"
+
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
+import QRCode from "qrcode"
+import CryptoJS from "crypto-js"
 
 export default function UserDashboard() {
   const navigate = useNavigate()
@@ -11,8 +15,10 @@ export default function UserDashboard() {
   const [showProfile, setShowProfile] = useState(false)
   const [editProfile, setEditProfile] = useState(false)
   const [profileData, setProfileData] = useState({ name: "", email: "" })
+  const [qrCodes, setQrCodes] = useState({})
+  const [selectedQR, setSelectedQR] = useState(null)
+  const [showQRModal, setShowQRModal] = useState(false)
 
-  // Get user data from localStorage and check role
   useEffect(() => {
     const userData = localStorage.getItem("user")
     const token = localStorage.getItem("token")
@@ -24,23 +30,19 @@ export default function UserDashboard() {
 
     const parsedUser = JSON.parse(userData)
     if (parsedUser.role !== "user") {
-      navigate("/admin-dashboard") // Redirect if not a user
+      navigate("/admin-dashboard")
       return
     }
 
     setUser(parsedUser)
     setProfileData({ name: parsedUser.name, email: parsedUser.email })
 
-    // Fetch data on initial load
     fetchEvents(token)
-    // Only fetch bookings if the tab is active, or if we need to ensure data is there on initial load
-    // For initial load, we'll fetch it here. For tab switch, it's handled in onClick.
     if (activeTab === "bookings") {
       fetchBookings(token, parsedUser._id)
     }
-  }, [navigate, activeTab]) // Added activeTab to dependency array for potential re-fetch logic
+  }, [navigate, activeTab])
 
-  // Fetch all events
   const fetchEvents = async (token) => {
     try {
       const response = await fetch("https://backend-assh.onrender.com/events/all", {
@@ -58,35 +60,32 @@ export default function UserDashboard() {
     }
   }
 
-  // Fetch user bookings - now sends userId in body as POST
   const fetchBookings = async (token, userId) => {
-    setLoading(true) // Set loading true when fetching bookings
+    setLoading(true)
     try {
       const response = await fetch(`https://backend-assh.onrender.com/bookings/getall`, {
-        // Assuming a new endpoint for POST
-        method: "POST", // Changed to POST
+        method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ userId: userId }), // userId in body
+        body: JSON.stringify({ userId: userId }),
       })
       const data = await response.json()
       if (response.ok) {
         setBookings(data.result || [])
       } else {
         console.error("Failed to fetch bookings:", data.error || response.statusText)
-        setBookings([]) // Clear bookings on error
+        setBookings([])
       }
       setLoading(false)
     } catch (error) {
       console.error("Error fetching bookings:", error)
-      setBookings([]) // Clear bookings on network error
+      setBookings([])
       setLoading(false)
     }
   }
 
-  // Book a ticket
   const bookTicket = async (eventId) => {
     const token = localStorage.getItem("token")
     try {
@@ -104,7 +103,7 @@ export default function UserDashboard() {
       const data = await response.json()
       if (response.ok) {
         alert("Ticket booked successfully!")
-        fetchBookings(token, user._id) // Refresh bookings
+        fetchBookings(token, user._id)
       } else {
         alert(data.error || "Booking failed")
       }
@@ -114,7 +113,6 @@ export default function UserDashboard() {
     }
   }
 
-  // Validate ticket
   const validateTicket = async (booking, event) => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -130,15 +128,15 @@ export default function UserDashboard() {
               },
               body: JSON.stringify({
                 eventId: booking.eventId,
-                latitude: latitude,  //this is user lat 
-                longitude: longitude,  //this is user long 
+                latitude: latitude,
+                longitude: longitude,
                 bookingId: booking._id,
               }),
             })
             const data = await response.json()
             if (response.ok) {
               alert("Ticket validated successfully!")
-              fetchBookings(token, user._id) // Refresh bookings
+              fetchBookings(token, user._id)
             } else {
               alert(data.error || "Validation failed")
             }
@@ -156,14 +154,12 @@ export default function UserDashboard() {
     }
   }
 
-  // Logout
   const handleLogout = () => {
     localStorage.removeItem("user")
     localStorage.removeItem("token")
     navigate("/")
   }
 
-  // Format date
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
@@ -172,8 +168,92 @@ export default function UserDashboard() {
     })
   }
 
+  const generateQRCode = async (booking, event) => {
+    try {
+      const qrData = {
+        userId: user._id,
+        userName: user.name,
+        userEmail: user.email,
+        bookingId: booking._id,
+        eventId: booking.eventId,
+        eventName: event?.name || "Event",
+        eventDate: event?.date,
+        eventTime: event?.time,
+        eventArea: event?.area,
+        bookingStatus: booking.status,
+        bookedAt: booking.bookedAt,
+        price: event?.price,
+        timestamp: new Date().toISOString(),
+      }
+
+      const secretKey = "EventTicketQR2024"
+      const encryptedData = CryptoJS.AES.encrypt(JSON.stringify(qrData), secretKey).toString()
+
+      const smallQR = await QRCode.toDataURL(encryptedData, {
+        width: 48,
+        margin: 1,
+        color: {
+          dark: "#4C1D95",
+          light: "#FFFFFF",
+        },
+      })
+
+      const largeQR = await QRCode.toDataURL(encryptedData, {
+        width: 300,
+        margin: 2,
+        color: {
+          dark: "#4C1D95",
+          light: "#FFFFFF",
+        },
+      })
+
+      return { small: smallQR, large: largeQR }
+    } catch (error) {
+      console.error("Error generating QR code:", error)
+      return null
+    }
+  }
+
+  useEffect(() => {
+    const generateAllQRCodes = async () => {
+      if (bookings.length > 0 && events.length > 0) {
+        const newQrCodes = {}
+
+        for (const booking of bookings) {
+          const event = events.find((e) => e._id === booking.eventId)
+          if (event) {
+            const qrCode = await generateQRCode(booking, event)
+            if (qrCode) {
+              newQrCodes[booking._id] = qrCode
+            }
+          }
+        }
+
+        setQrCodes(newQrCodes)
+      }
+    }
+
+    generateAllQRCodes()
+  }, [bookings, events, user])
+
+  const handleQRClick = (bookingId, event) => {
+    const qrData = qrCodes[bookingId]
+    if (qrData) {
+      setSelectedQR({
+        qrCode: qrData.large,
+        eventName: event?.name || "Event",
+        bookingId: bookingId,
+      })
+      setShowQRModal(true)
+    }
+  }
+
+  const closeQRModal = () => {
+    setShowQRModal(false)
+    setSelectedQR(null)
+  }
+
   if (loading && activeTab === "bookings") {
-    // Only show loading for bookings tab if it's active
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 flex items-center justify-center">
         <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 border border-white/20">
@@ -186,7 +266,6 @@ export default function UserDashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 relative overflow-hidden">
-      {/* Background Image */}
       <div className="absolute inset-0">
         <img
           src="/outdoor-music-festival.jpg"
@@ -196,14 +275,12 @@ export default function UserDashboard() {
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/90 via-purple-900/85 to-pink-800/90"></div>
       </div>
 
-      {/* Floating Background Elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse"></div>
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse delay-700"></div>
         <div className="absolute top-40 left-40 w-60 h-60 bg-indigo-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse delay-1000"></div>
       </div>
 
-      {/* Header */}
       <div className="relative z-10 p-6">
         <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl border border-white/20 p-6">
           <div className="flex justify-between items-center">
@@ -236,7 +313,6 @@ export default function UserDashboard() {
         </div>
       </div>
 
-      {/* Profile Modal */}
       {showProfile && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-6">
           <div className="bg-white/10 backdrop-blur-lg rounded-3xl shadow-2xl border border-white/20 p-8 max-w-md w-full">
@@ -302,7 +378,6 @@ export default function UserDashboard() {
                   </button>
                   <button
                     onClick={() => {
-                      // Here you would typically save to backend
                       setEditProfile(false)
                       alert("Profile updated successfully!")
                     }}
@@ -317,7 +392,36 @@ export default function UserDashboard() {
         </div>
       )}
 
-      {/* Navigation Tabs */}
+      {showQRModal && selectedQR && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+          <div className="bg-white/10 backdrop-blur-lg rounded-3xl shadow-2xl border border-white/20 p-8 max-w-md w-full">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold bg-gradient-to-r from-purple-200 to-pink-200 bg-clip-text text-transparent">
+                Ticket QR Code
+              </h2>
+              <button
+                onClick={closeQRModal}
+                className="text-white/60 hover:text-white text-2xl font-bold transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="text-center">
+              <div className="bg-white rounded-2xl p-4 mb-4 inline-block shadow-lg">
+                <img
+                  src={selectedQR.qrCode || "/placeholder.svg"}
+                  alt="Large Ticket QR Code"
+                  className="w-full h-full"
+                />
+              </div>
+              <h3 className="text-lg font-semibold text-white mb-2">{selectedQR.eventName}</h3>
+              <p className="text-purple-200/80 text-sm">Scan this QR code for ticket verification</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="relative z-10 px-6 mb-6">
         <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl border border-white/20 p-2">
           <div className="flex space-x-2">
@@ -340,7 +444,6 @@ export default function UserDashboard() {
               }}
               className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all duration-300 ${
                 activeTab === "bookings"
-                
                   ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg"
                   : "text-purple-200 hover:bg-white/10"
               }`}
@@ -351,7 +454,6 @@ export default function UserDashboard() {
         </div>
       </div>
 
-      {/* Content */}
       <div className="relative z-10 px-6 pb-6">
         {activeTab === "events" && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -435,15 +537,30 @@ export default function UserDashboard() {
                         <h3 className="text-xl font-bold text-white group-hover:text-purple-200 transition-colors">
                           {event?.name || "Event"}
                         </h3>
-                        <span
-                          className={`px-3 py-1 text-white text-sm rounded-full ${
-                            booking.status === "validated"
-                              ? "bg-gradient-to-r from-green-500 to-emerald-500"
-                              : "bg-gradient-to-r from-yellow-500 to-orange-500"
-                          }`}
-                        >
-                          {booking.status}
-                        </span>
+                        <div className="flex items-center space-x-2">
+                          <span
+                            className={`px-3 py-1 text-white text-sm rounded-full ${
+                              booking.status === "validated"
+                                ? "bg-gradient-to-r from-green-500 to-emerald-500"
+                                : "bg-gradient-to-r from-yellow-500 to-orange-500"
+                            }`}
+                          >
+                            {booking.status}
+                          </span>
+                          {qrCodes[booking._id] && (
+                            <div
+                              className="bg-white rounded-lg p-1 shadow-lg cursor-pointer hover:shadow-xl transition-shadow"
+                              onClick={() => handleQRClick(booking._id, event)}
+                              title="Click to view larger QR code"
+                            >
+                              <img
+                                src={qrCodes[booking._id]?.small || "/placeholder.svg"}
+                                alt="Ticket QR Code"
+                                className="w-12 h-12 rounded"
+                              />
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       {event && (
