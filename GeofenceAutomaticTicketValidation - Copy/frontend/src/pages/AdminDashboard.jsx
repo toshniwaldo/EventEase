@@ -54,7 +54,7 @@ export default function AdminDashboard() {
   // Fetch all events (for admin view)
   const fetchEvents = async (token) => {
     try {
-      const response = await fetch("http://localhost:5000/events/all", {
+      const response = await fetch("https://backend-assh.onrender.com/events/all", {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -114,7 +114,7 @@ export default function AdminDashboard() {
       let response
       if (isEditing && currentEventId) {
         // Update existing event
-        response = await fetch(`http://localhost:5000/events/update`, { // note change to base URL only
+        response = await fetch(`https://backend-assh.onrender.com/events/update`, { // note change to base URL only
           method: "PUT",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -127,7 +127,7 @@ export default function AdminDashboard() {
         });
       }else {
         // Create new event
-        response = await fetch("http://localhost:5000/events/create", {
+        response = await fetch("https://backend-assh.onrender.com/events/create", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -195,7 +195,7 @@ const handleDeleteEvent = async (eventId) => {
 
   const token = localStorage.getItem("token");
   try {
-    const response = await fetch("http://localhost:5000/events/delete", {
+    const response = await fetch("https://backend-assh.onrender.com/events/delete", {
       method: "DELETE",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -644,3 +644,4 @@ const handleDeleteEvent = async (eventId) => {
     </div>
   )
 }
+
