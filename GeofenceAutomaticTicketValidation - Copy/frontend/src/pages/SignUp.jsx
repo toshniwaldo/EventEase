@@ -30,7 +30,7 @@ const SignUp = () => {
     setIsLoading(true)
 
     try {
-      const response = await fetch("http://localhost:5000/auth/signUp", {
+      const response = await fetch("https://backend-assh.onrender.com/auth/signUp", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -290,3 +290,4 @@ const SignUp = () => {
 }
 
 export default SignUp
+
