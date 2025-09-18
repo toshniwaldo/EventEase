@@ -34,7 +34,7 @@ export default function Dashboard() {
   // Fetch all events
   const fetchEvents = async (token) => {
     try {
-      const response = await fetch("http://localhost:5000/events/all", {
+      const response = await fetch("https://backend-assh.onrender.com/events/all", {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -52,7 +52,7 @@ export default function Dashboard() {
   // Fetch user bookings
   const fetchBookings = async (token, userId) => {
     try {
-      const response = await fetch(`http://localhost:5000/bookings/user/${userId}`, {
+      const response = await fetch(`https://backend-assh.onrender.com/bookings/user/${userId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -73,7 +73,7 @@ export default function Dashboard() {
   const bookTicket = async (eventId) => {
     const token = localStorage.getItem("token")
     try {
-      const response = await fetch("http://localhost:5000/bookings/book", {
+      const response = await fetch("https://backend-assh.onrender.com/bookings/book", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -106,7 +106,7 @@ export default function Dashboard() {
           const token = localStorage.getItem("token")
 
           try {
-            const response = await fetch("http://localhost:5000/bookings/validate", {
+            const response = await fetch("https://backend-assh.onrender.com/bookings/validate", {
               method: "PUT",
               headers: {
                 Authorization: `Bearer ${token}`,
@@ -473,3 +473,4 @@ export default function Dashboard() {
     </div>
   )
 }
+
